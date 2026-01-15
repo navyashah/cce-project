@@ -1,0 +1,13 @@
+control_id: CC7.2
+name: Logging and Monitoring
+risk: >
+  Security incidents may go undetected or be unactionable without centralized logging
+  and sufficient log retention for investigation.
+expected_state:
+  centralized_logging_enabled: true
+  log_retention_days_minimum: 90
+evidence_sources:
+  - system: cicd
+    description: CI/CD log shipping + retention configuration (mocked).
+severity: medium
+check_frequency: weekly

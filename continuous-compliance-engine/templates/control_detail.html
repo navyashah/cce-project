@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}{{ control.control_id }} - Continuous Compliance Engine{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>{{ control.name }} ({{ control.control_id }})</h2>
+    <a href="/ui/controls" class="btn btn-secondary">← Back to Controls</a>
+</div>
+
+<div class="detail-section">
+    <h3>Control Definition</h3>
+    <div class="detail-grid">
+        <div><strong>Control ID:</strong></div>
+        <div><code>{{ control.control_id }}</code></div>
+        
+        <div><strong>Name:</strong></div>
+        <div>{{ control.name }}</div>
+        
+        <div><strong>Risk:</strong></div>
+        <div>{{ control.risk }}</div>
+        
+        <div><strong>Severity:</strong></div>
+        <div><span class="badge badge-severity-{{ control.severity }}">{{ control.severity }}</span></div>
+        
+        <div><strong>Check Frequency:</strong></div>
+        <div>{{ control.check_frequency }}</div>
+        
+        <div><strong>Expected State:</strong></div>
+        <div><pre class="code-block">{{ control.expected_state | tojson(indent=2) }}</pre></div>
+        
+        <div><strong>Evidence Sources:</strong></div>
+        <div>
+            {% for source in control.evidence_sources %}
+                <div><code>{{ source.system }}</code>{% if source.description %}: {{ source.description }}{% endif %}</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="detail-section">
+    <h3>Latest Evaluation</h3>
+    {% if latest_evaluation %}
+    <div class="detail-grid">
+        <div><strong>Status:</strong></div>
+        <div>
+            {% if latest_evaluation.status == "PASS" %}
+                <span class="badge badge-pass">PASS</span>
+            {% else %}
+                <span class="badge badge-fail">FAIL</span>
+            {% endif %}
+        </div>
+        
+        <div><strong>Evaluated At:</strong></div>
+        <div>{{ latest_evaluation.evaluated_at[:19]|replace('T', ' ') }}</div>
+        
+        <div><strong>Severity:</strong></div>
+        <div><span class="badge badge-severity-{{ latest_evaluation.severity }}">{{ latest_evaluation.severity }}</span></div>
+        
+        <div><strong>Remediation:</strong></div>
+        <div><pre class="remediation-block">{{ latest_evaluation.remediation }}</pre></div>
+        
+        {% if latest_evaluation.details %}
+        <div><strong>Details:</strong></div>
+        <div><pre class="code-block">{{ latest_evaluation.details | tojson(indent=2) }}</pre></div>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="text-muted">No evaluations yet. Run checks to evaluate this control.</p>
+    {% endif %}
+</div>
+
+<div class="detail-section">
+    <h3>Latest Evidence Snapshots</h3>
+    {% if latest_evidence_by_source %}
+        {% for source_system, evidence_list in latest_evidence_by_source.items() %}
+        <div class="evidence-group">
+            <h4>Source: <code>{{ source_system }}</code></h4>
+            {% for evidence in evidence_list %}
+            <div class="evidence-item">
+                <div><strong>Collected At:</strong> {{ evidence.collected_at[:19]|replace('T', ' ') }}</div>
+                <pre class="code-block">{{ evidence.raw_snapshot | tojson(indent=2) }}</pre>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    {% else %}
+    <p class="text-muted">No evidence collected yet.</p>
+    {% endif %}
+</div>
+
+<div class="detail-section">
+    <h3>History</h3>
+    <div class="history-grid">
+        <div>
+            <h4>Last 10 Evaluations</h4>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Evaluated At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for eval in evaluation_history %}
+                    <tr>
+                        <td>
+                            {% if eval.status == "PASS" %}
+                                <span class="badge badge-pass">PASS</span>
+                            {% else %}
+                                <span class="badge badge-fail">FAIL</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ eval.evaluated_at[:19]|replace('T', ' ') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not evaluation_history %}
+                    <tr><td colspan="2" class="text-muted">No evaluation history</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div>
+            <h4>Last 10 Evidence Snapshots</h4>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Collected At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ev in evidence_history %}
+                    <tr>
+                        <td><code>{{ ev.source_system }}</code></td>
+                        <td>{{ ev.collected_at[:19]|replace('T', ' ') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not evidence_history %}
+                    <tr><td colspan="2" class="text-muted">No evidence history</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

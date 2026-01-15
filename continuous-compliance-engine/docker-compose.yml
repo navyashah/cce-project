@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cce_db
+      POSTGRES_USER: cce_user
+      POSTGRES_PASSWORD: cce_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - cce_pgdata:/var/lib/postgresql/data
+
+volumes:
+  cce_pgdata:

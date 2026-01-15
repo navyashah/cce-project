@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts - Continuous Compliance Engine{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Alerts</h2>
+</div>
+
+{% if alerts %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Control ID</th>
+            <th>Severity</th>
+            <th>Created At</th>
+            <th>Message</th>
+            <th>Remediation</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for alert in alerts %}
+        <tr>
+            <td><code>{{ alert.control_id }}</code></td>
+            <td><span class="badge badge-severity-{{ alert.severity }}">{{ alert.severity }}</span></td>
+            <td>{{ alert.created_at[:19]|replace('T', ' ') }}</td>
+            <td>{{ alert.message }}</td>
+            <td><pre class="remediation-block">{{ alert.remediation }}</pre></td>
+            <td>
+                {% if alert.acknowledged %}
+                    <span class="badge badge-acknowledged">Acknowledged</span>
+                {% else %}
+                    <span class="badge badge-active">Active</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-muted">No alerts found.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,15 @@
+control_id: CC8.1
+name: Change Management
+risk: >
+  Unreviewed or unauthorized changes can introduce vulnerabilities, outages, or policy violations
+  without appropriate approvals.
+expected_state:
+  pr_reviews_required: true
+  production_deploy_approvals_required: true
+evidence_sources:
+  - system: github
+    description: Branch protection + PR review requirements (mocked / optional real API).
+  - system: cicd
+    description: Production deploy approvals (mocked).
+severity: high
+check_frequency: daily

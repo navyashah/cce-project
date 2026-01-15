@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Continuous Compliance Engine{% endblock %}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">Continuous Compliance Engine</h1>
+            <div class="nav-links">
+                <a href="/ui/controls" class="nav-link">Controls</a>
+                <a href="/ui/alerts" class="nav-link">Alerts</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% if message %}
+        <div class="message message-{{ message_type|default('info') }}">{{ message }}</div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

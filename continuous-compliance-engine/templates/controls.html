@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Controls - Continuous Compliance Engine{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Controls</h2>
+    <form method="post" action="/ui/run-checks" style="display: inline;">
+        <button type="submit" class="btn btn-primary">Run Checks</button>
+    </form>
+</div>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Control ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Severity</th>
+            <th>Last Evaluated</th>
+            <th>Evidence Freshness</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for control in controls %}
+        <tr class="clickable-row" onclick="window.location.href='/ui/controls/{{ control.control_id }}'">
+            <td><code>{{ control.control_id }}</code></td>
+            <td>{{ control.name }}</td>
+            <td>
+                {% if control.latest_status == "PASS" %}
+                    <span class="badge badge-pass">PASS</span>
+                {% elif control.latest_status == "FAIL" %}
+                    <span class="badge badge-fail">FAIL</span>
+                {% else %}
+                    <span class="badge badge-unknown">Not Evaluated</span>
+                {% endif %}
+            </td>
+            <td>
+                <span class="badge badge-severity-{{ control.severity }}">{{ control.severity }}</span>
+            </td>
+            <td>
+                {% if control.latest_evaluated_at %}
+                    {{ control.latest_evaluated_at[:19]|replace('T', ' ') }}
+                {% else %}
+                    <span class="text-muted">Never</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if control.latest_evidence_freshness %}
+                    {% for source, timestamp in control.latest_evidence_freshness.items() %}
+                        <div><code>{{ source }}</code>: {{ timestamp[:19]|replace('T', ' ') }}</div>
+                    {% endfor %}
+                {% else %}
+                    <span class="text-muted">No evidence</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

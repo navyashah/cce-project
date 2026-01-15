@@ -1,0 +1,13 @@
+control_id: CC6.1
+name: Logical Access Controls
+risk: >
+  Unauthorized access to production systems or sensitive data due to weak authentication
+  or overly broad administrative privileges.
+expected_state:
+  mfa_required_for_privileged_users: true
+  admin_access_restricted: true
+evidence_sources:
+  - system: cloud_iam
+    description: Privileged user MFA enforcement + admin role assignments (mocked).
+severity: high
+check_frequency: daily
