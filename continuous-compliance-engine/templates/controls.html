@@ -1,37 +1,67 @@
 {% extends "base.html" %}
-{% block title %}Controls - Continuous Compliance Engine{% endblock %}
+{% block title %}Controls — Compliance Engine{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h2>Controls</h2>
-  <form method="post" action="/ui/run-checks" style="display:inline;">
-    <button type="submit" class="btn btn-primary">Run Checks</button>
+
+<div class="fw-row">
+  <span class="fw-label">Framework</span>
+  <a href="/ui/controls" class="fw-chip {% if not request.query_params.get('fw') %}fw-active{% endif %}">All controls</a>
+  <a href="/ui/controls?fw=soc2" class="fw-chip {% if request.query_params.get('fw') == 'soc2' %}fw-active{% endif %}">🛡 SOC 2</a>
+  <a href="/ui/controls?fw=pci" class="fw-chip {% if request.query_params.get('fw') == 'pci' %}fw-active{% endif %}">💳 PCI DSS</a>
+</div>
+
+<div class="metrics">
+  <div class="mc">
+    <div class="mc-val" style="color:#2563eb">{{ pass_rate }}%</div>
+    <div class="mc-label">Compliance score</div>
+    <div class="mc-bar"><div class="mc-fill" style="background:#2563eb;width:{{ pass_rate }}%"></div></div>
+  </div>
+  <div class="mc">
+    <div class="mc-val" style="color:#16a34a">{{ controls_passing }}</div>
+    <div class="mc-label">Passing controls</div>
+    <div class="mc-bar"><div class="mc-fill" style="background:#16a34a;width:{{ pass_rate }}%"></div></div>
+  </div>
+  <div class="mc">
+    <div class="mc-val" style="color:#dc2626">{{ controls_failing }}</div>
+    <div class="mc-label">Failing controls</div>
+    <div class="mc-bar"><div class="mc-fill" style="background:#dc2626;width:{{ 100 - pass_rate }}%"></div></div>
+  </div>
+</div>
+
+<div class="sec-hdr">
+  <span class="sec-title">{{ controls|length }} control{{ 's' if controls|length != 1 else '' }}</span>
+  <form method="post" action="/ui/run-checks" style="display:inline">
+    <button type="submit" class="btn btn-primary">Run checks</button>
   </form>
 </div>
-<table class="data-table">
-  <thead>
-    <tr><th>Control ID</th><th>Name</th><th>Status</th><th>Severity</th><th>Last Evaluated</th><th>Evidence Freshness</th></tr>
-  </thead>
-  <tbody>
-    {% for control in controls %}
-    <tr class="clickable-row" onclick="window.location.href='/ui/controls/{{ control.control_id }}'">
-      <td><code>{{ control.control_id }}</code></td>
-      <td>{{ control.name }}</td>
-      <td>
-        {% if control.latest_status == "PASS" %}<span class="badge badge-pass">PASS</span>
-        {% elif control.latest_status == "FAIL" %}<span class="badge badge-fail">FAIL</span>
-        {% else %}<span class="badge badge-unknown">Not Evaluated</span>{% endif %}
-      </td>
-      <td><span class="badge badge-severity-{{ control.severity }}">{{ control.severity }}</span></td>
-      <td>{% if control.latest_evaluated_at %}{{ control.latest_evaluated_at[:19]|replace('T', ' ') }}{% else %}<span class="text-muted">Never</span>{% endif %}</td>
-      <td>
-        {% if control.latest_evidence_freshness %}
-          {% for source, timestamp in control.latest_evidence_freshness.items() %}
-            <div><code>{{ source }}</code>: {{ timestamp[:19]|replace('T', ' ') }}</div>
-          {% endfor %}
-        {% else %}<span class="text-muted">No evidence</span>{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+<div class="ctrl-grid">
+  {% for ctrl in controls %}
+  <a href="/ui/controls/{{ ctrl.control_id }}" class="ctrl-card {{ ctrl.latest_status|lower if ctrl.latest_status else 'unknown' }}">
+    <div class="ctrl-top">
+      <span class="ctrl-id">{{ ctrl.control_id }}</span>
+      <div class="ctrl-right">
+        {% if ctrl.latest_status == "PASS" %}
+          <span class="pill pill-pass">PASS</span>
+        {% elif ctrl.latest_status == "FAIL" %}
+          <span class="pill pill-fail">FAIL</span>
+        {% else %}
+          <span class="pill pill-slate">Not evaluated</span>
+        {% endif %}
+        {% if ctrl.control_id.startswith('PCI') %}
+          <span class="fw-icon">💳</span>
+        {% else %}
+          <span class="fw-icon">🛡</span>
+        {% endif %}
+        <div class="sev-dot sev-{{ ctrl.severity }}"></div>
+      </div>
+    </div>
+    <div class="ctrl-name">{{ ctrl.name }}</div>
+    <div class="ctrl-meta">
+      <span>{{ ctrl.check_frequency }}</span>
+      {% for src in ctrl.evidence_sources %}<span>{{ src.system }}</span>{% endfor %}
+      {% if ctrl.latest_evaluated_at %}<span>{{ ctrl.latest_evaluated_at[:16]|replace('T',' ') }}</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
 {% endblock %}

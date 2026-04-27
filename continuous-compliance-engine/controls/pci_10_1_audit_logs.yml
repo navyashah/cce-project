@@ -1,0 +1,13 @@
+control_id: PCI-10.1
+name: Audit logs for card data access
+risk: >
+  Without audit logs for cardholder data access, forensic investigation
+  of a breach is impossible and PCI DSS requirement 10 cannot be demonstrated.
+expected_state:
+  audit_logging_enabled: true
+  log_retention_days_minimum: 90
+evidence_sources:
+  - system: cicd
+    description: Log shipping and retention verification for card data access events (mocked).
+severity: medium
+check_frequency: weekly

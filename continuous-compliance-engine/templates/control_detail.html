@@ -1,32 +1,81 @@
 {% extends "base.html" %}
-{% block title %}{{ control.control_id }} - Continuous Compliance Engine{% endblock %}
+{% block title %}{{ control.control_id }} — Compliance Engine{% endblock %}
 {% block content %}
+
 <div class="page-header">
-  <h2>{{ control.name }} ({{ control.control_id }})</h2>
-  <a href="/ui/controls" class="btn btn-secondary">← Back to Controls</a>
+  <h2>
+    {% if control.control_id.startswith('PCI') %}💳{% else %}🛡{% endif %}
+    {{ control.name }}
+    <span style="font-size:12px;color:#94a3b8;font-weight:400;margin-left:8px">{{ control.control_id }}</span>
+  </h2>
+  <a href="/ui/controls" class="btn btn-secondary">← Back</a>
 </div>
+
 <div class="detail-section">
-  <h3>Control Definition</h3>
+  <h3>Control definition</h3>
   <div class="detail-grid">
-    <div><strong>Control ID:</strong></div><div><code>{{ control.control_id }}</code></div>
-    <div><strong>Severity:</strong></div><div><span class="badge badge-severity-{{ control.severity }}">{{ control.severity }}</span></div>
-    <div><strong>Check Frequency:</strong></div><div>{{ control.check_frequency }}</div>
-    <div><strong>Risk:</strong></div><div>{{ control.risk }}</div>
-    <div><strong>Expected State:</strong></div><div><pre class="code-block">{{ control.expected_state | tojson(indent=2) }}</pre></div>
+    <span class="detail-label">Severity</span>
+    <span><span class="pill {% if control.severity == 'high' %}pill-fail{% elif control.severity == 'medium' %}pill-warn{% else %}pill-blue{% endif %}">{{ control.severity }}</span></span>
+    <span class="detail-label">Check frequency</span><span>{{ control.check_frequency }}</span>
+    <span class="detail-label">Risk</span><span style="color:#64748b;font-size:13px">{{ control.risk }}</span>
+    <span class="detail-label">Expected state</span><pre class="code-block">{{ control.expected_state | tojson(indent=2) }}</pre>
+    <span class="detail-label">Evidence sources</span>
+    <span>{% for src in control.evidence_sources %}<code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:4px">{{ src.system }}</code>{% endfor %}</span>
   </div>
 </div>
+
 <div class="detail-section">
-  <h3>Latest Evaluation</h3>
+  <h3>Latest evaluation</h3>
   {% if latest_evaluation %}
   <div class="detail-grid">
-    <div><strong>Status:</strong></div>
-    <div>{% if latest_evaluation.status == "PASS" %}<span class="badge badge-pass">PASS</span>{% else %}<span class="badge badge-fail">FAIL</span>{% endif %}</div>
-    <div><strong>Evaluated At:</strong></div><div>{{ latest_evaluation.evaluated_at[:19]|replace('T', ' ') }}</div>
-    <div><strong>Remediation:</strong></div><div><pre class="remediation-block">{{ latest_evaluation.remediation }}</pre></div>
+    <span class="detail-label">Status</span>
+    <span>{% if latest_evaluation.status == 'PASS' %}<span class="pill pill-pass">PASS</span>{% else %}<span class="pill pill-fail">FAIL</span>{% endif %}</span>
+    <span class="detail-label">Evaluated at</span><span style="font-size:13px">{{ latest_evaluation.evaluated_at[:19]|replace('T',' ') }}</span>
+    <span class="detail-label">Remediation</span><pre class="remediation-block">{{ latest_evaluation.remediation }}</pre>
     {% if latest_evaluation.details %}
-    <div><strong>Details:</strong></div><div><pre class="code-block">{{ latest_evaluation.details | tojson(indent=2) }}</pre></div>
+    <span class="detail-label">Details</span><pre class="code-block">{{ latest_evaluation.details | tojson(indent=2) }}</pre>
     {% endif %}
   </div>
-  {% else %}<p class="text-muted">No evaluations yet. Click Run Checks.</p>{% endif %}
+  {% else %}
+  <p class="text-muted">No evaluations yet — click Run Checks from the controls page.</p>
+  {% endif %}
+</div>
+
+<div class="detail-section">
+  <h3>History</h3>
+  <div class="history-grid">
+    <div>
+      <p style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:0.5rem">Last 10 evaluations</p>
+      <table class="data-table">
+        <thead><tr><th>Status</th><th>Evaluated at</th></tr></thead>
+        <tbody>
+          {% for e in evaluation_history %}
+          <tr>
+            <td>{% if e.status == 'PASS' %}<span class="pill pill-pass">PASS</span>{% else %}<span class="pill pill-fail">FAIL</span>{% endif %}</td>
+            <td>{{ e.evaluated_at[:16]|replace('T',' ') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="text-muted">No history yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <p style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:0.5rem">Last 10 evidence snapshots</p>
+      <table class="data-table">
+        <thead><tr><th>Source</th><th>Collected at</th></tr></thead>
+        <tbody>
+          {% for e in evidence_history %}
+          <tr>
+            <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px">{{ e.source_system }}</code></td>
+            <td>{{ e.collected_at[:16]|replace('T',' ') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="text-muted">No evidence yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 {% endblock %}

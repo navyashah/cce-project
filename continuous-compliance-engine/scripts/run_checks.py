@@ -58,7 +58,13 @@ def run_checks_service(db: Session, run_at: datetime | None = None) -> dict[str,
     return summary
 
 def _collect_evidence_for_source(control_id: str, source_system: str, collected_at: datetime) -> dict[str, Any]:
-    if source_system == "github":
+    if control_id.startswith("PCI") and source_system == "cloud_iam":
+        from collectors.pci import collect_pci_iam_evidence
+        return collect_pci_iam_evidence(control_id, collected_at)
+    elif control_id.startswith("PCI") and source_system == "cicd":
+        from collectors.pci import collect_pci_logging_evidence
+        return collect_pci_logging_evidence(control_id, collected_at)
+    elif source_system == "github":
         return collect_github_evidence(control_id, collected_at)
     elif source_system == "cloud_iam":
         return collect_iam_evidence(control_id, collected_at)

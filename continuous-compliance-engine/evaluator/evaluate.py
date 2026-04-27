@@ -11,8 +11,49 @@ def evaluate_control(control: Control, evidence_by_source: dict[str, dict[str, A
         return _evaluate_cc7_2(control, evidence_by_source, expected)
     elif control_id == "CC8.1":
         return _evaluate_cc8_1(control, evidence_by_source, expected)
+    elif control_id == "PCI-2.1":
+        return _evaluate_pci_2_1(control, evidence_by_source, expected)
+    elif control_id == "PCI-7.1":
+        return _evaluate_pci_7_1(control, evidence_by_source, expected)
+    elif control_id == "PCI-10.1":
+        return _evaluate_pci_10_1(control, evidence_by_source, expected)
     else:
         return {"status": EvalStatus.fail, "severity": control.severity, "remediation": f"Unknown control {control_id}.", "details": {"error": "unknown_control"}}
+
+def _evaluate_pci_2_1(control, evidence_by_source, expected):
+    snapshot = evidence_by_source.get("cloud_iam", {}).get("raw_snapshot", {})
+    issues = []
+    if not snapshot.get("default_credentials_removed", False):
+        issues.append("Default credentials detected on system components")
+    if not snapshot.get("vendor_supplied_defaults_changed", False):
+        issues.append("Vendor-supplied default passwords have not been changed")
+    if issues:
+        return {"status": EvalStatus.fail, "severity": control.severity, "remediation": "1. Audit all components for default credentials.\n2. Change all vendor-supplied default passwords before deployment.\n3. Enforce via pre-deployment checklist or automated scanner.", "details": {"issues": issues, "actual": snapshot}}
+    return {"status": EvalStatus.pass_, "severity": control.severity, "remediation": "No action required.", "details": {"actual": snapshot}}
+
+def _evaluate_pci_7_1(control, evidence_by_source, expected):
+    snapshot = evidence_by_source.get("cloud_iam", {}).get("raw_snapshot", {})
+    issues = []
+    if not snapshot.get("access_restricted_to_need_to_know", False):
+        issues.append("Cardholder data access not restricted to need-to-know")
+    if not snapshot.get("api_layer_enforcement", False):
+        issues.append("Access restriction only enforced at UI layer — API layer unprotected")
+    if issues:
+        return {"status": EvalStatus.fail, "severity": control.severity, "remediation": "1. Implement access controls at the API layer, not just the UI.\n2. Apply least-privilege role bindings to cardholder data routes.\n3. Audit and remove unnecessary permissions.", "details": {"issues": issues, "actual": snapshot}}
+    return {"status": EvalStatus.pass_, "severity": control.severity, "remediation": "No action required.", "details": {"actual": snapshot}}
+
+def _evaluate_pci_10_1(control, evidence_by_source, expected):
+    snapshot = evidence_by_source.get("cicd", {}).get("raw_snapshot", {})
+    retention = snapshot.get("log_retention_days", 0)
+    min_ret = expected.get("log_retention_days_minimum", 90)
+    issues = []
+    if not snapshot.get("audit_logging_enabled", False):
+        issues.append("Audit logging for card data access is not enabled")
+    if retention < min_ret:
+        issues.append(f"Log retention {retention} days is below PCI DSS minimum of {min_ret} days")
+    if issues:
+        return {"status": EvalStatus.fail, "severity": control.severity, "remediation": f"1. Enable audit logging for all cardholder data access events.\n2. Configure retention to at least {min_ret} days.\n3. Protect log integrity to prevent tampering.", "details": {"issues": issues, "actual": snapshot}}
+    return {"status": EvalStatus.pass_, "severity": control.severity, "remediation": "No action required.", "details": {"actual": snapshot}}
 
 def _evaluate_cc6_1(control, evidence_by_source, expected):
     snapshot = evidence_by_source.get("cloud_iam", {}).get("raw_snapshot", {})

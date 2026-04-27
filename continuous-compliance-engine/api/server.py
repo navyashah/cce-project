@@ -189,17 +189,27 @@ def ui_root():
 
 
 @app.get("/ui/controls", response_class=HTMLResponse)
-def ui_controls(request: Request, db: Session = Depends(get_db), message: str | None = None):
-    controls = get_controls_with_latest_status(db)
-    return templates.TemplateResponse(
-        "controls.html",
-        {
-            "request": request,
-            "controls": controls,
-            "message": message,
-            "message_type": "success" if message else None,
-        },
-    )
+def ui_controls(request: Request, db: Session = Depends(get_db), message: str | None = None, fw: str | None = None):
+    all_controls = get_controls_with_latest_status(db)
+    if fw == "soc2":
+        controls = [c for c in all_controls if not c["control_id"].startswith("PCI")]
+    elif fw == "pci":
+        controls = [c for c in all_controls if c["control_id"].startswith("PCI")]
+    else:
+        controls = all_controls
+    evaluated = [c for c in controls if c["latest_status"] is not None]
+    passing = sum(1 for c in evaluated if c["latest_status"] == "PASS")
+    failing = sum(1 for c in evaluated if c["latest_status"] == "FAIL")
+    pass_rate = round(passing / len(evaluated) * 100) if evaluated else 0
+    return templates.TemplateResponse("controls.html", {
+        "request": request,
+        "controls": controls,
+        "message": message,
+        "message_type": "success" if message else None,
+        "controls_passing": passing,
+        "controls_failing": failing,
+        "pass_rate": pass_rate,
+    })
 
 
 @app.get("/ui/controls/{control_id}", response_class=HTMLResponse)

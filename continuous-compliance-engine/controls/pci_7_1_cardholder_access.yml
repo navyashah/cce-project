@@ -1,0 +1,13 @@
+control_id: PCI-7.1
+name: Cardholder data access restricted
+risk: >
+  Unrestricted access to cardholder data violates least-privilege principles
+  and significantly expands breach impact if an account is compromised.
+expected_state:
+  access_restricted_to_need_to_know: true
+  api_layer_enforcement: true
+evidence_sources:
+  - system: cloud_iam
+    description: IAM role bindings and API gateway policy for cardholder data routes (mocked).
+severity: high
+check_frequency: daily

@@ -3,22 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Continuous Compliance Engine{% endblock %}</title>
+  <title>{% block title %}Compliance Engine{% endblock %}</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+
+<div id="onboard-overlay" class="onboard-overlay">
+  <div class="ob-wrap">
+    <div class="ob-progress" id="ob-prog"></div>
+    <div class="ob-card" id="ob-card"></div>
+    <div class="ob-nav">
+      <button class="ob-back" id="ob-back" onclick="prevSlide()">Back</button>
+      <button class="ob-next" id="ob-next" onclick="nextSlide()">Continue</button>
+      <button class="ob-skip" onclick="dismissTour()">Skip</button>
+    </div>
+  </div>
+</div>
+
+<div id="main-app" style="display:none">
   <nav class="navbar">
-    <div class="nav-container">
-      <h1 class="nav-title">Continuous Compliance Engine</h1>
-      <div class="nav-links">
-        <a href="/ui/controls" class="nav-link">Controls</a>
-        <a href="/ui/alerts" class="nav-link">Alerts</a>
+    <div class="nav-left">
+      <div class="nav-logo">CE</div>
+      <span class="nav-title">Compliance Engine</span>
+      <span class="nav-sub">SOC 2 + PCI DSS</span>
+    </div>
+    <div class="nav-right">
+      <button class="tour-btn" onclick="replayTour()">&#10067; How it works</button>
+      <div class="nav-tabs">
+        <a href="/ui/controls" class="nav-tab {% if request.url.path == '/ui/controls' %}active{% endif %}">Controls</a>
+        <a href="/ui/alerts" class="nav-tab {% if request.url.path == '/ui/alerts' %}active{% endif %}">
+          Alerts
+        </a>
       </div>
     </div>
   </nav>
+
   <div class="container">
-    {% if message %}<div class="message message-{{ message_type|default('info') }}">{{ message }}</div>{% endif %}
+    {% if message %}
+    <div class="message message-{{ message_type|default('info') }}">{{ message }}</div>
+    {% endif %}
     {% block content %}{% endblock %}
   </div>
+</div>
+
+<script>
+const slides=[
+  {
+    step:'What this is',
+    heading:'Your security rules, checked automatically',
+    body:'Companies — especially fintechs — have to follow security rules. Things like: everyone with admin access must have two-factor authentication, or all code changes must be reviewed before they ship. Normally someone checks these by hand. This app does it automatically.',
+    example:{label:'What the app monitors',rows:[{name:'All admins have 2FA enabled',t:'blue'},{name:'Code reviewed before production',t:'blue'},{name:'Logs kept for at least 90 days',t:'blue'}]}
+  },
+  {
+    step:'How a check works',
+    heading:'It reads your systems, then grades each rule',
+    body:'When you click "Run Checks", the app connects to your cloud accounts, GitHub, and logging systems. It reads the current state of each one, compares it against what the rule says should be true, and records a PASS or FAIL — with a timestamp, so you have a full audit history.',
+    example:{label:'One check run',rows:[{name:'MFA enabled for all admins',t:'pass'},{name:'PR reviews required on main branch',t:'pass'},{name:'Log retention policy enforced',t:'fail'}]}
+  },
+  {
+    step:'Drift detection',
+    heading:'It notices when something breaks that was fine before',
+    body:'If a rule was passing last week and is suddenly failing today — say, someone turned off two-factor authentication — the app catches that change and fires an alert. The shift from passing to failing is called compliance drift. Catching it fast is the whole point.',
+    example:{label:'Drift in action',rows:[{name:'MFA enforcement — yesterday',t:'pass'},{name:'MFA enforcement — today',t:'fail'},{name:'Alert created automatically',t:'warn'}]}
+  },
+  {
+    step:'Two frameworks',
+    heading:'SOC 2 and PCI DSS, side by side',
+    body:'SOC 2 is the trust standard most software companies need. PCI DSS is the payment security standard — every fintech that processes card transactions must comply with it. This dashboard monitors controls from both frameworks together, so nothing falls through the cracks.',
+    example:{label:'Controls in this demo',rows:[{name:'🛡 CC6.1 — Logical access controls',t:'blue'},{name:'🛡 CC8.1 — Change management',t:'blue'},{name:'💳 PCI-7.1 — Cardholder data access',t:'blue'}]}
+  }
+];
+
+let slide = 0;
+
+function renderSlide() {
+  const s = slides[slide];
+  const prog = document.getElementById('ob-prog');
+  prog.innerHTML = slides.map((_,i) => `<div class="ob-seg${i<=slide?' done':''}"></div>`).join('');
+  const pillClass = {pass:'pill-pass',fail:'pill-fail',warn:'pill-warn',blue:'pill-blue'};
+  const pillLabel = {pass:'PASS',fail:'FAIL',warn:'ALERT',blue:'CHECK'};
+  let ex = '';
+  if (s.example) {
+    ex = `<div class="ob-example"><div class="ob-ex-label">${s.example.label}</div>${s.example.rows.map(r=>`<div class="ob-ex-row"><span class="ob-ex-name">${r.name}</span><span class="pill ${pillClass[r.t]}">${pillLabel[r.t]}</span></div>`).join('')}</div>`;
+  }
+  document.getElementById('ob-card').innerHTML = `<div class="ob-eyebrow">Step ${slide+1} of ${slides.length} — ${s.step}</div><div class="ob-heading">${s.heading}</div><div class="ob-body">${s.body}</div>${ex}`;
+  document.getElementById('ob-back').disabled = slide === 0;
+  document.getElementById('ob-next').textContent = slide === slides.length-1 ? 'Enter dashboard →' : 'Continue';
+}
+
+function prevSlide() { if (slide > 0) { slide--; renderSlide(); } }
+function nextSlide() { if (slide < slides.length-1) { slide++; renderSlide(); } else dismissTour(); }
+
+function dismissTour() {
+  document.getElementById('onboard-overlay').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  localStorage.setItem('cce_toured', '1');
+}
+
+function replayTour() {
+  slide = 0;
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('onboard-overlay').style.display = 'flex';
+  renderSlide();
+}
+
+renderSlide();
+
+if (localStorage.getItem('cce_toured')) {
+  dismissTour();
+}
+</script>
 </body>
 </html>
