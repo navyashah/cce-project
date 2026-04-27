@@ -1,7 +1,7 @@
 control_id: CC7.2
 name: Logging and Monitoring
 risk: >
-  Security incidents may go undetected or be unactionable without centralized logging
+  Security incidents may go undetected without centralized logging
   and sufficient log retention for investigation.
 expected_state:
   centralized_logging_enabled: true

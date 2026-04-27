@@ -14,15 +14,12 @@ from sqlalchemy.orm import Session
 from db.config import settings
 from db.models import Alert, Base, Control, Evidence, Evaluation, EvalStatus, Severity
 from db.query_helpers import get_controls_with_latest_status
-from db.session import engine, get_db
+from db.session import SessionLocal, engine, get_db
 
-# Setup templates and static files
 BASE_DIR = pathlib.Path(__file__).parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title=settings.app_name)
-
-# Mount static files
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
@@ -32,13 +29,15 @@ def utcnow() -> datetime:
 
 @app.on_event("startup")
 def _init_db() -> None:
-    """
-    Simple schema management:
-    - create_all is enough for this internal demo (no migrations).
-    - Tradeoff: schema changes require manual coordination.
-    """
-
     Base.metadata.create_all(bind=engine)
+    # Fix 4: seed controls from YAML on startup so the table is never empty on first load
+    from controls.loader import upsert_controls
+    controls_dir = BASE_DIR / "controls"
+    db = SessionLocal()
+    try:
+        upsert_controls(db, controls_dir)
+    finally:
+        db.close()
 
 
 @app.get("/controls")
@@ -68,9 +67,7 @@ def get_control(control_id: str, db: Session = Depends(get_db)):
     latest_eval = (
         db.execute(
             select(Evaluation).where(Evaluation.control_id == control_id).order_by(desc(Evaluation.evaluated_at)).limit(1)
-        )
-        .scalars()
-        .first()
+        ).scalars().first()
     )
     latest_evidence = None
     if latest_eval:
@@ -88,9 +85,7 @@ def get_control(control_id: str, db: Session = Depends(get_db)):
             "created_at": c.created_at.isoformat(),
         },
         "latest_evaluation": (
-            None
-            if not latest_eval
-            else {
+            None if not latest_eval else {
                 "evaluated_at": latest_eval.evaluated_at.isoformat(),
                 "status": latest_eval.status.value,
                 "severity": latest_eval.severity.value,
@@ -99,9 +94,7 @@ def get_control(control_id: str, db: Session = Depends(get_db)):
             }
         ),
         "latest_evidence": (
-            None
-            if not latest_evidence
-            else {
+            None if not latest_evidence else {
                 "collected_at": latest_evidence.collected_at.isoformat(),
                 "source_system": latest_evidence.source_system,
                 "raw_snapshot": latest_evidence.raw_snapshot,
@@ -112,18 +105,11 @@ def get_control(control_id: str, db: Session = Depends(get_db)):
 
 @app.post("/run-checks")
 def run_checks(db: Session = Depends(get_db)):
-    """
-    Implemented in `scripts/run_checks.py` (service-style function).
-    Imported lazily to keep API startup fast and side-effect-free.
-    """
-
     from scripts.run_checks import run_checks_service
-
     return run_checks_service(db=db, run_at=utcnow())
 
 
 def _dashboard_metrics(db: Session) -> dict:
-    # Latest evaluation per control_id
     subq = (
         select(
             Evaluation.control_id.label("control_id"),
@@ -134,11 +120,12 @@ def _dashboard_metrics(db: Session) -> dict:
     )
     latest = (
         db.execute(
-            select(Evaluation)
-            .join(subq, (Evaluation.control_id == subq.c.control_id) & (Evaluation.evaluated_at == subq.c.max_evaluated_at))
-        )
-        .scalars()
-        .all()
+            select(Evaluation).join(
+                subq,
+                (Evaluation.control_id == subq.c.control_id)
+                & (Evaluation.evaluated_at == subq.c.max_evaluated_at),
+            )
+        ).scalars().all()
     )
 
     total = len(latest)
@@ -150,7 +137,6 @@ def _dashboard_metrics(db: Session) -> dict:
         if e.status == EvalStatus.fail:
             failed_by_sev[e.severity.value] += 1
 
-    # Evidence freshness: latest evidence timestamp per control_id
     ev_subq = (
         select(Evidence.control_id.label("control_id"), func.max(Evidence.collected_at).label("max_collected_at"))
         .group_by(Evidence.control_id)
@@ -159,18 +145,17 @@ def _dashboard_metrics(db: Session) -> dict:
     freshness_rows = db.execute(select(ev_subq.c.control_id, ev_subq.c.max_collected_at)).all()
     evidence_freshness = {cid: ts.isoformat() for cid, ts in freshness_rows if ts is not None}
 
-    # Active (unacknowledged) alerts count
     active_alerts_count = db.execute(select(func.count(Alert.id)).where(Alert.acknowledged == False)).scalar() or 0
 
     return {
         "controls_total": total,
         "controls_passing": passing,
         "pass_rate": pass_rate,
-        "audit_readiness_score": pass_rate,  # same as pass rate for this demo
+        "audit_readiness_score": pass_rate,
         "failed_controls_by_severity": failed_by_sev,
         "evidence_freshness": evidence_freshness,
         "active_alerts_count": active_alerts_count,
-        "mttr_days": None,  # placeholder: requires remediation workflow + ticket timestamps
+        "mttr_days": None,
     }
 
 
@@ -181,13 +166,8 @@ def dashboard_json(db: Session = Depends(get_db)):
 
 @app.get("/alerts")
 def list_alerts(db: Session = Depends(get_db), limit: int = 50):
-    """
-    List recent alerts ordered by created_at descending.
-    """
     alerts = (
-        db.execute(select(Alert).order_by(desc(Alert.created_at)).limit(limit))
-        .scalars()
-        .all()
+        db.execute(select(Alert).order_by(desc(Alert.created_at)).limit(limit)).scalars().all()
     )
     return [
         {
@@ -203,44 +183,13 @@ def list_alerts(db: Session = Depends(get_db), limit: int = 50):
     ]
 
 
-@app.get("/dashboard/ui", response_class=HTMLResponse)
-def dashboard_ui(db: Session = Depends(get_db)):
-    m = _dashboard_metrics(db)
-    html = f"""
-    <html>
-      <head><title>Continuous Compliance Engine</title></head>
-      <body style="font-family: ui-sans-serif, system-ui; max-width: 900px; margin: 24px auto;">
-        <h2>Continuous Compliance Engine — Dashboard</h2>
-        <p><b>Pass rate:</b> {m["pass_rate"]:.0%} ({m["controls_passing"]}/{m["controls_total"]})</p>
-        <p><b>Audit readiness score:</b> {m["audit_readiness_score"]:.0%}</p>
-        <p><b>Active alerts:</b> {m["active_alerts_count"]}</p>
-        <h3>Failed controls by severity</h3>
-        <pre>{m["failed_controls_by_severity"]}</pre>
-        <h3>Evidence freshness (latest per control)</h3>
-        <pre>{m["evidence_freshness"]}</pre>
-        <h3>MTTR</h3>
-        <p>{m["mttr_days"]}</p>
-        <hr />
-        <p>JSON endpoints: <code>/dashboard</code> | <code>/alerts</code></p>
-      </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
-
-
-# ============================================================================
-# UI Routes (Jinja2 templates)
-# ============================================================================
-
 @app.get("/ui")
 def ui_root():
-    """Redirect to controls page."""
     return RedirectResponse(url="/ui/controls", status_code=302)
 
 
 @app.get("/ui/controls", response_class=HTMLResponse)
 def ui_controls(request: Request, db: Session = Depends(get_db), message: str | None = None):
-    """Controls table view."""
     controls = get_controls_with_latest_status(db)
     return templates.TemplateResponse(
         "controls.html",
@@ -255,67 +204,43 @@ def ui_controls(request: Request, db: Session = Depends(get_db), message: str | 
 
 @app.get("/ui/controls/{control_id}", response_class=HTMLResponse)
 def ui_control_detail(control_id: str, request: Request, db: Session = Depends(get_db)):
-    """Control detail view."""
     ctrl = db.execute(select(Control).where(Control.control_id == control_id)).scalar_one_or_none()
     if not ctrl:
         raise HTTPException(status_code=404, detail="Control not found")
 
-    # Latest evaluation
     latest_eval = (
         db.execute(
             select(Evaluation).where(Evaluation.control_id == control_id).order_by(desc(Evaluation.evaluated_at)).limit(1)
-        )
-        .scalars()
-        .first()
+        ).scalars().first()
     )
 
-    # Latest evidence grouped by source_system
     latest_evidence_by_source: dict[str, list[dict]] = {}
     if latest_eval:
-        # Get all evidence for the latest evaluation timestamp
         evidence_rows = (
             db.execute(
                 select(Evidence)
                 .where(Evidence.control_id == control_id)
                 .where(Evidence.collected_at == latest_eval.evaluated_at)
                 .order_by(Evidence.source_system.asc())
-            )
-            .scalars()
-            .all()
+            ).scalars().all()
         )
         for ev in evidence_rows:
             source = ev.source_system
             if source not in latest_evidence_by_source:
                 latest_evidence_by_source[source] = []
             latest_evidence_by_source[source].append(
-                {
-                    "collected_at": ev.collected_at.isoformat(),
-                    "raw_snapshot": ev.raw_snapshot,
-                }
+                {"collected_at": ev.collected_at.isoformat(), "raw_snapshot": ev.raw_snapshot}
             )
 
-    # Evaluation history (last 10)
     eval_history = (
         db.execute(
-            select(Evaluation)
-            .where(Evaluation.control_id == control_id)
-            .order_by(desc(Evaluation.evaluated_at))
-            .limit(10)
-        )
-        .scalars()
-        .all()
+            select(Evaluation).where(Evaluation.control_id == control_id).order_by(desc(Evaluation.evaluated_at)).limit(10)
+        ).scalars().all()
     )
-
-    # Evidence history (last 10)
     evidence_history = (
         db.execute(
-            select(Evidence)
-            .where(Evidence.control_id == control_id)
-            .order_by(desc(Evidence.collected_at))
-            .limit(10)
-        )
-        .scalars()
-        .all()
+            select(Evidence).where(Evidence.control_id == control_id).order_by(desc(Evidence.collected_at)).limit(10)
+        ).scalars().all()
     )
 
     control_dict = {
@@ -339,22 +264,6 @@ def ui_control_detail(control_id: str, request: Request, db: Session = Depends(g
             "details": latest_eval.details,
         }
 
-    eval_history_list = [
-        {
-            "status": e.status.value,
-            "evaluated_at": e.evaluated_at.isoformat(),
-        }
-        for e in eval_history
-    ]
-
-    evidence_history_list = [
-        {
-            "source_system": e.source_system,
-            "collected_at": e.collected_at.isoformat(),
-        }
-        for e in evidence_history
-    ]
-
     return templates.TemplateResponse(
         "control_detail.html",
         {
@@ -362,17 +271,15 @@ def ui_control_detail(control_id: str, request: Request, db: Session = Depends(g
             "control": control_dict,
             "latest_evaluation": latest_eval_dict,
             "latest_evidence_by_source": latest_evidence_by_source,
-            "evaluation_history": eval_history_list,
-            "evidence_history": evidence_history_list,
+            "evaluation_history": [{"status": e.status.value, "evaluated_at": e.evaluated_at.isoformat()} for e in eval_history],
+            "evidence_history": [{"source_system": e.source_system, "collected_at": e.collected_at.isoformat()} for e in evidence_history],
         },
     )
 
 
 @app.post("/ui/run-checks")
 def ui_run_checks(db: Session = Depends(get_db)):
-    """Run checks and redirect back to controls page."""
     from scripts.run_checks import run_checks_service
-
     try:
         result = run_checks_service(db=db, run_at=utcnow())
         message = (
@@ -381,19 +288,14 @@ def ui_run_checks(db: Session = Depends(get_db)):
         )
     except Exception as e:
         message = f"Error running checks: {str(e)}"
-
     return RedirectResponse(url=f"/ui/controls?message={quote(message)}", status_code=302)
 
 
 @app.get("/ui/alerts", response_class=HTMLResponse)
 def ui_alerts(request: Request, db: Session = Depends(get_db), limit: int = 50):
-    """Alerts view."""
     alerts = (
-        db.execute(select(Alert).order_by(desc(Alert.created_at)).limit(limit))
-        .scalars()
-        .all()
+        db.execute(select(Alert).order_by(desc(Alert.created_at)).limit(limit)).scalars().all()
     )
-
     alerts_list = [
         {
             "control_id": a.control_id,
@@ -405,12 +307,4 @@ def ui_alerts(request: Request, db: Session = Depends(get_db), limit: int = 50):
         }
         for a in alerts
     ]
-
-    return templates.TemplateResponse(
-        "alerts.html",
-        {
-            "request": request,
-            "alerts": alerts_list,
-        },
-    )
-
+    return templates.TemplateResponse("alerts.html", {"request": request, "alerts": alerts_list})
