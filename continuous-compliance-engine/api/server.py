@@ -36,16 +36,21 @@ def _init_db() -> None:
     db = SessionLocal()
     try:
         upsert_controls(db, controls_dir)
-        # Seed FinCore with RLS enabled (secure/passing state)
         seed_fincore(settings.database_url, secure_mode=True)
-    except Exception:
-        pass  # Don't fail startup if fincore already seeded
+    except Exception as e:
+        print(f"Startup warning: {e}")
     finally:
         db.close()
 
 
-@app.get("/controls")
-def list_controls(db: Session = Depends(get_db)):
+@app.post("/admin/seed-fincore")
+def admin_seed_fincore():
+    from scripts.seed_fincore import seed_fincore
+    try:
+        seed_fincore(settings.database_url, secure_mode=True)
+        return {"status": "ok", "message": "FinCore seeded successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}(db: Session = Depends(get_db)):
     rows = db.execute(select(Control).order_by(Control.control_id.asc())).scalars().all()
     return [
         {
