@@ -291,14 +291,33 @@ def ui_control_detail(control_id: str, request: Request, db: Session = Depends(g
 def ui_run_checks(db: Session = Depends(get_db)):
     from scripts.run_checks import run_checks_service
     try:
-        result = run_checks_service(db=db, run_at=utcnow())
-        message = (
-            f"Checks completed: {result['controls_passed']}/{result['controls_processed']} passed. "
-            f"{result['alerts_created']} alert(s) created."
-        )
+        result = run_checks_service(db=db, run_at=utcnow(), simulate_drift=False)
+        message = f"Checks complete: {result['controls_passed']}/{result['controls_processed']} passed. {result['alerts_created']} alert(s) created."
     except Exception as e:
         message = f"Error running checks: {str(e)}"
     return RedirectResponse(url=f"/ui/controls?message={quote(message)}", status_code=302)
+
+
+@app.post("/ui/run-checks/drift")
+def ui_run_checks_drift(db: Session = Depends(get_db)):
+    from scripts.run_checks import run_checks_service
+    try:
+        result = run_checks_service(db=db, run_at=utcnow(), simulate_drift=True)
+        message = f"Drift simulated: {result['controls_passed']}/{result['controls_processed']} passed. {result['alerts_created']} alert(s) created."
+    except Exception as e:
+        message = f"Error: {str(e)}"
+    return RedirectResponse(url=f"/ui/controls?message={quote(message)}&mode=drift", status_code=302)
+
+
+@app.post("/ui/run-checks/reset")
+def ui_run_checks_reset(db: Session = Depends(get_db)):
+    from scripts.run_checks import run_checks_service
+    try:
+        result = run_checks_service(db=db, run_at=utcnow(), simulate_drift=False)
+        message = f"Reset to passing: {result['controls_passed']}/{result['controls_processed']} controls passing."
+    except Exception as e:
+        message = f"Error: {str(e)}"
+    return RedirectResponse(url=f"/ui/controls?message={quote(message)}&mode=clean", status_code=302)
 
 
 @app.get("/ui/alerts", response_class=HTMLResponse)

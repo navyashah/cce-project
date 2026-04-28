@@ -27,11 +27,31 @@
   </div>
 </div>
 
+{% if message %}
+<div class="message message-{{ message_type|default('info') }}">{{ message }}</div>
+{% endif %}
+
 <div class="sec-hdr">
   <span class="sec-title">{{ controls|length }} control{{ 's' if controls|length != 1 else '' }}</span>
-  <form method="post" action="/ui/run-checks" style="display:inline">
-    <button type="submit" class="btn btn-primary">Run checks</button>
-  </form>
+  <div style="display:flex;gap:8px;align-items:center">
+    <form method="post" action="/ui/run-checks/reset" style="display:inline">
+      <button type="submit" class="btn btn-secondary" title="Run all checks in passing state">↺ Reset to passing</button>
+    </form>
+    <form method="post" action="/ui/run-checks/drift" style="display:inline">
+      <button type="submit" class="btn btn-danger" title="Simulate real-world failures across controls">⚡ Simulate drift</button>
+    </form>
+    <form method="post" action="/ui/run-checks" style="display:inline">
+      <button type="submit" class="btn btn-primary">Run checks</button>
+    </form>
+  </div>
+</div>
+
+<div class="sim-explainer">
+  <div class="sim-explainer-title">🧪 This is a simulator</div>
+  <div class="sim-explainer-body">
+    All evidence is mocked — no real systems are connected. Click <strong>Simulate drift</strong> to trigger realistic failures and see how alerts are raised.
+    Click <strong>Reset to passing</strong> to restore a clean state. Click any control to inspect the evidence and remediation detail.
+  </div>
 </div>
 
 <div class="ctrl-grid">

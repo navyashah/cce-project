@@ -11,9 +11,13 @@ from controls.loader import upsert_controls
 from db.models import Alert, Control, EvalStatus, Evidence, Evaluation
 from evaluator.evaluate import evaluate_control
 
-def run_checks_service(db: Session, run_at: datetime | None = None) -> dict[str, Any]:
+def run_checks_service(db: Session, run_at: datetime | None = None, simulate_drift: bool | None = None) -> dict[str, Any]:
     if run_at is None:
         run_at = datetime.now(timezone.utc)
+    # Allow caller to override drift setting; fall back to env/settings
+    if simulate_drift is None:
+        from db.config import settings
+        simulate_drift = settings.simulate_drift
     controls_dir = pathlib.Path(__file__).parent.parent / "controls"
     controls = upsert_controls(db, controls_dir)
     summary = {"run_at": run_at.isoformat(), "controls_processed": 0, "controls_passed": 0, "controls_failed": 0, "evidence_collected": 0, "evaluations_created": 0, "alerts_created": 0, "failed_controls": []}
@@ -24,7 +28,7 @@ def run_checks_service(db: Session, run_at: datetime | None = None) -> dict[str,
         evidence_rows: list[Evidence] = []
         for source_info in control.evidence_sources:
             source_system = source_info["system"]
-            evidence_data = _collect_evidence_for_source(control.control_id, source_system, run_at)
+            evidence_data = _collect_evidence_for_source(control.control_id, source_system, run_at, simulate_drift)
             evidence_row = Evidence(control_id=control.control_id, source_system=source_system, collected_at=run_at, raw_snapshot=evidence_data["raw_snapshot"])
             db.add(evidence_row)
             db.flush()
@@ -57,17 +61,17 @@ def run_checks_service(db: Session, run_at: datetime | None = None) -> dict[str,
     db.commit()
     return summary
 
-def _collect_evidence_for_source(control_id: str, source_system: str, collected_at: datetime) -> dict[str, Any]:
+def _collect_evidence_for_source(control_id: str, source_system: str, collected_at: datetime, simulate_drift: bool = False) -> dict[str, Any]:
     if control_id.startswith("PCI") and source_system == "cloud_iam":
         from collectors.pci import collect_pci_iam_evidence
-        return collect_pci_iam_evidence(control_id, collected_at)
+        return collect_pci_iam_evidence(control_id, collected_at, simulate_drift)
     elif control_id.startswith("PCI") and source_system == "cicd":
         from collectors.pci import collect_pci_logging_evidence
         return collect_pci_logging_evidence(control_id, collected_at)
     elif source_system == "github":
         return collect_github_evidence(control_id, collected_at)
     elif source_system == "cloud_iam":
-        return collect_iam_evidence(control_id, collected_at)
+        return collect_iam_evidence(control_id, collected_at, simulate_drift)
     elif source_system == "cicd":
         return collect_logging_evidence(control_id, collected_at)
     else:
