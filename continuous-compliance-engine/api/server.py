@@ -50,7 +50,11 @@ def admin_seed_fincore():
         seed_fincore(settings.database_url, secure_mode=True)
         return {"status": "ok", "message": "FinCore seeded successfully"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}(db: Session = Depends(get_db)):
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/controls")
+def list_controls(db: Session = Depends(get_db)):
     rows = db.execute(select(Control).order_by(Control.control_id.asc())).scalars().all()
     return [
         {
