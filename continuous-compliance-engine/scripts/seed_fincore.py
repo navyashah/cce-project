@@ -125,14 +125,14 @@ def seed_fincore(database_url: str, secure_mode: bool = True):
     with engine.connect() as conn:
         # Run DDL statements one at a time (psycopg2 doesn't support multi-statement execute)
         for stmt in FINCORE_DDL.strip().split(";"):
-            stmt = stmt.strip()
-            if stmt and not stmt.startswith("--"):
-                conn.execute(text(stmt))
+            clean = "\n".join(l for l in stmt.splitlines() if not l.strip().startswith("--")).strip()
+            if clean:
+                conn.execute(text(clean))
 
         for stmt in SEED_DATA.strip().split(";"):
-            stmt = stmt.strip()
-            if stmt and not stmt.startswith("--"):
-                conn.execute(text(stmt))
+            clean = "\n".join(l for l in stmt.splitlines() if not l.strip().startswith("--")).strip()
+            if clean:
+                conn.execute(text(clean))
 
         if secure_mode:
             conn.execute(text("ALTER TABLE fincore.card_data ENABLE ROW LEVEL SECURITY"))
