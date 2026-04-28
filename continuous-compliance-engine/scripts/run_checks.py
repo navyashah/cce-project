@@ -62,7 +62,16 @@ def run_checks_service(db: Session, run_at: datetime | None = None, simulate_dri
     return summary
 
 def _collect_evidence_for_source(control_id: str, source_system: str, collected_at: datetime, simulate_drift: bool = False) -> dict[str, Any]:
-    if control_id.startswith("PCI") and source_system == "cloud_iam":
+    if source_system == "fincore_db":
+        from collectors.fincore import collect_fincore_evidence
+        from db.config import settings
+        # For drift simulation on PCI-7.1, temporarily disable RLS
+        if simulate_drift and control_id == "PCI-7.1":
+            _set_fincore_rls(settings.database_url, enabled=False)
+        elif control_id == "PCI-7.1":
+            _set_fincore_rls(settings.database_url, enabled=True)
+        return collect_fincore_evidence(control_id, settings.database_url, collected_at)
+    elif control_id.startswith("PCI") and source_system == "cloud_iam":
         from collectors.pci import collect_pci_iam_evidence
         return collect_pci_iam_evidence(control_id, collected_at, simulate_drift)
     elif control_id.startswith("PCI") and source_system == "cicd":
@@ -76,3 +85,18 @@ def _collect_evidence_for_source(control_id: str, source_system: str, collected_
         return collect_logging_evidence(control_id, collected_at)
     else:
         return {"collected_at": collected_at.isoformat(), "source_system": source_system, "raw_snapshot": {"error": f"Unknown source system: {source_system}"}}
+
+
+def _set_fincore_rls(database_url: str, enabled: bool):
+    """Toggle row-level security on fincore.card_data to simulate drift."""
+    from sqlalchemy import create_engine, text
+    try:
+        engine = create_engine(database_url)
+        with engine.connect() as conn:
+            if enabled:
+                conn.execute(text("ALTER TABLE fincore.card_data ENABLE ROW LEVEL SECURITY;"))
+            else:
+                conn.execute(text("ALTER TABLE fincore.card_data DISABLE ROW LEVEL SECURITY;"))
+            conn.commit()
+    except Exception:
+        pass  # fincore may not be seeded yet

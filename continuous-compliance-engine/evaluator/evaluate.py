@@ -32,18 +32,22 @@ def _evaluate_pci_2_1(control, evidence_by_source, expected):
     return {"status": EvalStatus.pass_, "severity": control.severity, "remediation": "No action required.", "details": {"actual": snapshot}}
 
 def _evaluate_pci_7_1(control, evidence_by_source, expected):
-    snapshot = evidence_by_source.get("cloud_iam", {}).get("raw_snapshot", {})
+    # Prefers real fincore_db evidence; falls back to mock cloud_iam
+    snapshot = evidence_by_source.get("fincore_db", {}).get("raw_snapshot") or \
+               evidence_by_source.get("cloud_iam", {}).get("raw_snapshot", {})
     issues = []
     if not snapshot.get("access_restricted_to_need_to_know", False):
         issues.append("Cardholder data access not restricted to need-to-know")
     if not snapshot.get("api_layer_enforcement", False):
-        issues.append("Access restriction only enforced at UI layer — API layer unprotected")
+        issues.append("Row-level security DISABLED — access restriction only enforced at application layer, not database layer")
     if issues:
-        return {"status": EvalStatus.fail, "severity": control.severity, "remediation": "1. Implement access controls at the API layer, not just the UI.\n2. Apply least-privilege role bindings to cardholder data routes.\n3. Audit and remove unnecessary permissions.", "details": {"issues": issues, "actual": snapshot}}
+        return {"status": EvalStatus.fail, "severity": control.severity, "remediation": "1. Enable row-level security (RLS) on fincore.card_data at the database layer.\n2. Apply least-privilege role policies to cardholder data tables.\n3. Never rely solely on application-layer access controls for sensitive data.", "details": {"issues": issues, "actual": snapshot}}
     return {"status": EvalStatus.pass_, "severity": control.severity, "remediation": "No action required.", "details": {"actual": snapshot}}
 
 def _evaluate_pci_10_1(control, evidence_by_source, expected):
-    snapshot = evidence_by_source.get("cicd", {}).get("raw_snapshot", {})
+    # Accepts evidence from either cicd (mock) or fincore_db (real)
+    snapshot = evidence_by_source.get("fincore_db", {}).get("raw_snapshot") or \
+               evidence_by_source.get("cicd", {}).get("raw_snapshot", {})
     retention = snapshot.get("log_retention_days", 0)
     min_ret = expected.get("log_retention_days_minimum", 90)
     issues = []

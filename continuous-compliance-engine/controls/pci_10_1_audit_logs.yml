@@ -7,7 +7,7 @@ expected_state:
   audit_logging_enabled: true
   log_retention_days_minimum: 90
 evidence_sources:
-  - system: cicd
-    description: Log shipping and retention verification for card data access events (mocked).
+  - system: fincore_db
+    description: Real SQL check — audit_log table existence and entry count.
 severity: medium
 check_frequency: weekly

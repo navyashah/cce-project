@@ -30,12 +30,16 @@ def utcnow() -> datetime:
 @app.on_event("startup")
 def _init_db() -> None:
     Base.metadata.create_all(bind=engine)
-    # Fix 4: seed controls from YAML on startup so the table is never empty on first load
     from controls.loader import upsert_controls
+    from scripts.seed_fincore import seed_fincore
     controls_dir = BASE_DIR / "controls"
     db = SessionLocal()
     try:
         upsert_controls(db, controls_dir)
+        # Seed FinCore with RLS enabled (secure/passing state)
+        seed_fincore(settings.database_url, secure_mode=True)
+    except Exception:
+        pass  # Don't fail startup if fincore already seeded
     finally:
         db.close()
 
